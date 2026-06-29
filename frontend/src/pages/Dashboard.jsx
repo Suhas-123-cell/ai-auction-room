@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth.js'
 import { getToken } from '../lib/supabase.js'
@@ -34,6 +34,37 @@ export default function Dashboard() {
   const [code,    setCode]    = useState('')
   const [dname,   setDname]   = useState('')
   const [jBudget, setJBudget] = useState(10000)
+
+  // My Bids
+  const [bids,      setBids]      = useState([])
+  const [bidsLoad,  setBidsLoad]  = useState(false)
+  const [deleting,  setDeleting]  = useState(null)
+
+  const loadBids = useCallback(async () => {
+    setBidsLoad(true)
+    try {
+      const token = await getToken()
+      const r = await fetch(`${API}/api/rooms/bids/mine`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (r.ok) setBids(await r.json())
+    } finally { setBidsLoad(false) }
+  }, [])
+
+  useEffect(() => { if (mode === 'bids') loadBids() }, [mode, loadBids])
+
+  async function deleteBid(bid) {
+    if (!window.confirm(`Remove bid of ₹${bid.amount.toLocaleString()} from "${bid.rooms?.name}"?`)) return
+    setDeleting(bid.id)
+    try {
+      const token = await getToken()
+      const r = await fetch(`${API}/api/rooms/bids/${bid.id}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${token}` }
+      })
+      if (r.ok) setBids(p => p.filter(b => b.id !== bid.id))
+      else { const d = await r.json(); setErr(d.detail ?? 'Delete failed') }
+    } finally { setDeleting(null) }
+  }
 
   async function create(e) {
     e.preventDefault(); setErr(''); setBusy(true)
@@ -113,6 +144,14 @@ export default function Dashboard() {
                 Join room
               </button>
             </div>
+            <div className="action-card" onClick={()=>setMode('bids')}>
+              <div className="action-card-icon">📋</div>
+              <h3>My Bid History</h3>
+              <p>View all your current and past bids across every auction room. Remove bids from completed auctions.</p>
+              <button className="btn btn-ghost" style={{width:'auto',padding:'10px 24px'}} onClick={e=>{e.stopPropagation();setMode('bids')}}>
+                View bids
+              </button>
+            </div>
           </div>
         )}
 
@@ -178,6 +217,83 @@ export default function Dashboard() {
                 {busy ? 'Creating…' : 'Create & enter room →'}
               </button>
             </form>
+          </div>
+        )}
+
+        {mode==='bids' && (
+          <div className="form-panel" style={{maxWidth:820}}>
+            <div className="form-panel-header">
+              <h3>My Bid History</h3>
+              <button className="btn btn-ghost" style={{width:'auto',padding:'6px 14px',fontSize:12}} onClick={()=>{setMode(null);setErr('')}}>← Back</button>
+            </div>
+
+            {bidsLoad && <div style={{textAlign:'center',padding:'40px 0',color:'var(--text-3)'}}>Loading bids…</div>}
+
+            {!bidsLoad && bids.length === 0 && (
+              <div style={{textAlign:'center',padding:'48px 0',color:'var(--text-3)'}}>
+                <div style={{fontSize:36,marginBottom:12}}>📭</div>
+                <div>No bids yet. Join an auction room to start bidding.</div>
+              </div>
+            )}
+
+            {!bidsLoad && bids.length > 0 && (
+              <>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 100px 90px 90px 36px',gap:8,padding:'6px 12px',marginBottom:4}}>
+                  {['Room','Item','Amount','Date','Status',''].map(h=>(
+                    <div key={h} style={{fontSize:10,fontWeight:700,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.08em'}}>{h}</div>
+                  ))}
+                </div>
+                <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                  {bids.map(b => {
+                    const status = b.rooms?.status ?? 'unknown'
+                    const isCompleted = status === 'completed'
+                    const statusColor = status==='auction' ? 'var(--gold)' : status==='completed' ? 'var(--text-3)' : '#60a5fa'
+                    return (
+                      <div key={b.id} style={{
+                        display:'grid',gridTemplateColumns:'1fr 1fr 100px 90px 90px 36px',gap:8,alignItems:'center',
+                        padding:'10px 12px',background:'var(--bg-raise)',borderRadius:'var(--r-sm)',
+                        border:'1px solid rgba(255,255,255,0.06)',
+                        opacity: isCompleted ? 0.75 : 1,
+                      }}>
+                        <div style={{fontWeight:600,fontSize:13,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                          {b.rooms?.name ?? '—'}
+                          <div style={{fontSize:10,color:'var(--text-3)',fontFamily:'var(--mono)',marginTop:2}}>{b.rooms?.code}</div>
+                        </div>
+                        <div style={{fontSize:13,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:'var(--text-2)'}}>
+                          {b.items?.name ?? '—'}
+                        </div>
+                        <div style={{fontFamily:'var(--mono)',fontWeight:700,fontSize:13,color:'var(--gold)'}}>
+                          ₹{b.amount.toLocaleString()}
+                        </div>
+                        <div style={{fontSize:11,color:'var(--text-3)'}}>
+                          {new Date(b.placed_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}
+                          <div>{new Date(b.placed_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</div>
+                        </div>
+                        <div style={{fontSize:11,fontWeight:600,color:statusColor,textTransform:'capitalize'}}>
+                          {status}
+                        </div>
+                        <button
+                          disabled={!isCompleted || deleting===b.id}
+                          onClick={()=>deleteBid(b)}
+                          title={isCompleted ? 'Remove this bid' : 'Can only remove bids from completed auctions'}
+                          style={{
+                            background:'none',border:'1px solid rgba(239,68,68,0.2)',borderRadius:'var(--r-sm)',
+                            color: isCompleted ? 'var(--red)' : 'var(--text-3)',
+                            cursor: isCompleted ? 'pointer' : 'not-allowed',
+                            width:32,height:32,display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,flexShrink:0,
+                            opacity: isCompleted ? 1 : 0.35,
+                          }}>
+                          {deleting===b.id ? '…' : '×'}
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div style={{marginTop:16,fontSize:12,color:'var(--text-3)'}}>
+                  {bids.length} bid{bids.length!==1?'s':''} total · Bids from completed auctions can be removed
+                </div>
+              </>
+            )}
           </div>
         )}
 

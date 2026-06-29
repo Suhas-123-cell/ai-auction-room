@@ -135,3 +135,33 @@ async def upload_item_photo(
     pub_url = sb.storage.from_("item-photos").get_public_url(path)
     sb.table("items").update({"photo_url": pub_url}).eq("id", item_id).execute()
     return {"photo_url": pub_url}
+
+
+@router.get("/bids/mine")
+async def my_bids(user_id: str = Depends(get_user_id)):
+    sb = get_supabase()
+    bids = (
+        sb.table("bids")
+        .select("*, items(name, photo_url), rooms(name, status, code)")
+        .eq("bidder_id", user_id)
+        .order("placed_at", desc=True)
+        .execute()
+    )
+    return bids.data
+
+
+@router.delete("/bids/{bid_id}")
+async def delete_bid(bid_id: str, user_id: str = Depends(get_user_id)):
+    sb = get_supabase()
+    bid = sb.table("bids").select("bidder_id, room_id").eq("id", bid_id).execute()
+    if not bid.data:
+        raise HTTPException(status_code=404, detail="Bid not found")
+    b = bid.data[0]
+    if b["bidder_id"] != user_id:
+        raise HTTPException(status_code=403, detail="Not your bid")
+    # Only allow deleting bids from completed rooms
+    room = sb.table("rooms").select("status").eq("id", b["room_id"]).execute()
+    if room.data and room.data[0]["status"] != "completed":
+        raise HTTPException(status_code=400, detail="Can only remove bids from completed auctions")
+    sb.table("bids").delete().eq("id", bid_id).execute()
+    return {"ok": True}
