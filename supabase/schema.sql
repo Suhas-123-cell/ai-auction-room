@@ -9,6 +9,7 @@ create table public.rooms (
   code          text not null unique,
   status        text not null default 'lobby' check (status in ('lobby','auction','completed')),
   admin_id      uuid references auth.users(id),
+  photo_url     text,
   created_at    timestamptz not null default now()
 );
 
@@ -36,6 +37,7 @@ create table public.items (
   winner_id     uuid references auth.users(id),
   winner_name   text,
   sold_price    int,
+  photo_url     text,
   created_at    timestamptz not null default now()
 );
 

@@ -21,42 +21,44 @@ export default function Results() {
   }, [roomId])
 
   if (loading) return (
-    <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',gap:12}}>
-      <span className="spinner" style={{width:20,height:20,borderWidth:3}} />
-      <span style={{color:'var(--text-3)'}}>Loading results…</span>
+    <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',flexDirection:'column',gap:16}}>
+      <span className="spinner" style={{width:24,height:24,borderWidth:3}} />
+      <span style={{color:'var(--text-2)',fontSize:14}}>Loading results…</span>
     </div>
   )
 
   const items        = data?.items ?? []
   const participants = data?.participants ?? []
-  const sold         = items.filter(i => i.status === 'sold')
-  const totalRaised  = sold.reduce((s, i) => s + (i.sold_price ?? i.current_bid ?? 0), 0)
+  const sold         = items.filter(i => i.status==='sold')
+  const totalRaised  = sold.reduce((s,i) => s+(i.sold_price??i.current_bid??0), 0)
 
   return (
     <>
       <header className="app-header">
-        <span className="logo">AI Auction Room</span>
+        <div className="logo">AI <span>Auction</span> Room</div>
         <button className="btn btn-ghost" style={{width:'auto',padding:'6px 14px',fontSize:12}} onClick={()=>nav('/')}>
-          Back to dashboard
+          ← Back to dashboard
         </button>
       </header>
       <div className="results-page">
-        <h1 className="results-title">{roomName} — Results</h1>
+        <h1 className="results-title">🏆 {roomName}</h1>
         <p className="results-sub">
           {sold.length} of {items.length} items sold &nbsp;·&nbsp;
-          Total raised: <span className="text-amber mono">&#8377;{totalRaised.toLocaleString('en-IN')}</span>
+          Total raised: <span style={{color:'var(--gold)',fontFamily:'var(--mono)',fontWeight:700}}>₹{totalRaised.toLocaleString('en-IN')}</span>
         </p>
 
-        <table className="results-table" style={{marginBottom:32}}>
+        <table className="results-table" style={{marginBottom:40}}>
           <thead>
-            <tr><th>#</th><th>Item</th><th>Base</th><th>Sold Price</th><th>Winner</th><th>Status</th></tr>
+            <tr>
+              <th>Lot</th><th>Item</th><th>Base</th><th>Final Price</th><th>Winner</th><th>Status</th>
+            </tr>
           </thead>
           <tbody>
-            {items.map((item, i) => (
+            {items.map((item,i) => (
               <tr key={item.id}>
-                <td style={{color:'var(--text-3)',fontFamily:'var(--mono)'}}>{i+1}</td>
+                <td style={{color:'var(--text-3)',fontFamily:'var(--mono)',fontWeight:700}}>#{String(i+1).padStart(2,'0')}</td>
                 <td style={{fontWeight:600}}>{item.name}</td>
-                <td className="mono" style={{color:'var(--text-3)'}}>&#8377;{item.base_price?.toLocaleString('en-IN')}</td>
+                <td style={{fontFamily:'var(--mono)',color:'var(--text-3)'}}>₹{item.base_price?.toLocaleString('en-IN')}</td>
                 <td className="price-cell">{item.sold_price ? `₹${item.sold_price.toLocaleString('en-IN')}` : '—'}</td>
                 <td style={{color:'var(--text-2)'}}>{item.winner ?? '—'}</td>
                 <td><span className={`badge ${item.status}`}>{item.status}</span></td>
@@ -65,18 +67,18 @@ export default function Results() {
           </tbody>
         </table>
 
-        <h2 style={{fontSize:16,fontWeight:700,marginBottom:12}}>Team Summary</h2>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:12}}>
+        <h2 style={{fontSize:18,fontWeight:700,fontFamily:'var(--serif)',marginBottom:16}}>Team Summary</h2>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:14}}>
           {participants.map(p => {
-            const won   = items.filter(i => i.winner === p.display_name && i.status === 'sold')
-            const spent = won.reduce((s,i) => s+(i.sold_price??0), 0)
+            const won   = items.filter(i => i.winner===p.display_name && i.status==='sold')
+            const spent = won.reduce((s,i)=>s+(i.sold_price??0),0)
             return (
-              <div key={p.user_id} className="panel" style={{padding:16}}>
-                <div style={{fontWeight:700,marginBottom:4}}>{p.display_name}</div>
-                {p.role==='admin' && <span className="participant-role" style={{marginBottom:8,display:'inline-block'}}>admin</span>}
+              <div key={p.user_id} style={{background:'var(--bg-card)',border:'1px solid rgba(255,255,255,0.06)',borderRadius:'var(--r-lg)',padding:20}}>
+                <div style={{fontWeight:700,marginBottom:6,fontSize:15}}>{p.display_name}</div>
+                {p.role==='admin' && <span className="p-role" style={{display:'inline-block',marginBottom:8}}>admin</span>}
                 <div style={{fontSize:12,color:'var(--text-3)',marginBottom:4}}>{won.length} item{won.length!==1?'s':''} won</div>
-                <div className="mono text-amber" style={{fontSize:18,fontWeight:700}}>&#8377;{spent.toLocaleString('en-IN')}</div>
-                <div style={{fontSize:11,color:'var(--text-3)'}}>of &#8377;{p.budget?.toLocaleString('en-IN')} budget</div>
+                <div style={{fontFamily:'var(--mono)',fontSize:22,fontWeight:700,color:'var(--gold)'}}>₹{spent.toLocaleString('en-IN')}</div>
+                <div style={{fontSize:11,color:'var(--text-3)'}}>of ₹{p.budget?.toLocaleString('en-IN')} budget</div>
               </div>
             )
           })}

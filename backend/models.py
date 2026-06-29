@@ -19,6 +19,7 @@ class ItemCreate(BaseModel):
     description: str = ""
     base_price: int
     order_index: int = 0
+    photo_url: Optional[str] = None
 
 
 class BidRequest(BaseModel):
