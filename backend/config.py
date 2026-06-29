@@ -1,7 +1,8 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     SUPABASE_URL: str
     SUPABASE_SERVICE_KEY: str
     SUPABASE_JWT_SECRET: str
@@ -9,8 +10,7 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:5173"
     AUCTION_TIMER_SECONDS: int = 30
 
-    class Config:
-        env_file = ".env"
+
 
 
 settings = Settings()

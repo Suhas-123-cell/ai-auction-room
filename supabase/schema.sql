@@ -18,7 +18,7 @@ create table public.room_participants (
   room_id       uuid not null references rooms(id) on delete cascade,
   user_id       uuid not null references auth.users(id),
   display_name  text not null,
-  role          text not null default 'bidder' check (role in ('admin','bidder')),
+  role          text not null default 'bidder' check (role in ('admin','bidder','participant')),
   budget        int  not null default 10000,
   spent         int  not null default 0,
   joined_at     timestamptz not null default now(),

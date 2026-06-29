@@ -24,7 +24,7 @@ async def create_room(body: RoomCreate, user_id: str = Depends(get_user_id)):
     room = sb.table("rooms").insert({
         "code": code,
         "name": body.name,
-        "created_by": user_id,
+        "admin_id": user_id,
     }).execute()
 
     room_data = room.data[0]
@@ -56,7 +56,7 @@ async def join_room(body: RoomJoin, user_id: str = Depends(get_user_id)):
         "room_id": room_data["id"],
         "user_id": user_id,
         "display_name": body.display_name,
-        "role": "participant",
+        "role": "bidder",
         "budget": body.budget,
     }).execute()
 
@@ -99,6 +99,7 @@ async def add_item(room_id: str, body: ItemCreate, user_id: str = Depends(get_us
         "description": body.description,
         "base_price": body.base_price,
         "order_index": body.order_index,
+        **({"photo_url": body.photo_url} if body.photo_url else {}),
     }).execute()
     return item.data[0]
 
