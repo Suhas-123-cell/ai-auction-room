@@ -1,4 +1,3 @@
-import jwt
 from supabase import create_client, Client
 from .config import settings
 
@@ -13,18 +12,15 @@ def get_supabase() -> Client:
 
 
 def verify_token(token: str) -> dict | None:
-    """Verify a Supabase JWT and return the payload, or None if invalid."""
+    """Verify a Supabase JWT using the admin auth client."""
     try:
-        payload = jwt.decode(
-            token,
-            settings.SUPABASE_JWT_SECRET,
-            algorithms=["HS256"],
-            audience="authenticated",
-        )
-        return payload
-    except jwt.ExpiredSignatureError:
+        sb = get_supabase()
+        resp = sb.auth.get_user(token)
+        if resp and resp.user:
+            return {"sub": resp.user.id}
         return None
-    except jwt.InvalidTokenError:
+    except Exception as e:
+        print(f"Token verify error: {e}")
         return None
 
 
