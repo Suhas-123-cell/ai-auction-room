@@ -102,32 +102,41 @@ export default function AuctionRoom() {
             </div>
           ))}
         </div>
-        {isAdmin ? (
-          <div style={{textAlign:'center'}}>
-            {scheduledAt && countdown && (
-              <div style={{marginBottom:16,padding:'12px 24px',background:'rgba(201,168,76,0.08)',border:'1px solid var(--gold-border)',borderRadius:'var(--r)',display:'inline-block'}}>
-                <div style={{fontSize:11,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:4}}>Scheduled start</div>
-                <div style={{fontFamily:'var(--mono)',fontSize:22,fontWeight:700,color:'var(--gold)'}}>{countdown}</div>
-                <div style={{fontSize:11,color:'var(--text-3)',marginTop:4}}>{scheduledAt.toLocaleString()}</div>
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:20}}>
+          {scheduledAt && countdown && (
+            <div style={{
+              padding:'20px 48px',
+              background:'rgba(201,168,76,0.07)',
+              border:'1px solid var(--gold-border)',
+              borderRadius:'var(--r)',
+              textAlign:'center',
+            }}>
+              <div style={{fontSize:10,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.12em',marginBottom:8}}>
+                {isAdmin ? 'Scheduled start' : 'Auction starts in'}
               </div>
-            )}
-            <button className="btn btn-primary" style={{width:220,marginBottom:8}} onClick={startAuction}>
-              🔨 {scheduledAt ? 'Start Now (override)' : 'Start Auction'}
-            </button>
-            <p style={{fontSize:12,color:'var(--text-3)'}}>{itemsTotal} item{itemsTotal!==1?'s':''} queued</p>
-          </div>
-        ) : (
-          <div style={{textAlign:'center'}}>
-            {scheduledAt && countdown && (
-              <div style={{marginBottom:16,padding:'12px 24px',background:'rgba(201,168,76,0.08)',border:'1px solid var(--gold-border)',borderRadius:'var(--r)',display:'inline-block'}}>
-                <div style={{fontSize:11,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:4}}>Auction starts in</div>
-                <div style={{fontFamily:'var(--mono)',fontSize:22,fontWeight:700,color:'var(--gold)'}}>{countdown}</div>
-                <div style={{fontSize:11,color:'var(--text-3)',marginTop:4}}>{scheduledAt.toLocaleString()}</div>
+              <div style={{fontFamily:'var(--mono)',fontSize:30,fontWeight:700,color:'var(--gold)',letterSpacing:'0.04em'}}>
+                {countdown}
               </div>
-            )}
-            <p style={{color:'var(--text-3)',fontSize:14}}>Waiting for the auctioneer to begin…</p>
-          </div>
-        )}
+              <div style={{fontSize:11,color:'var(--text-3)',marginTop:8}}>
+                {scheduledAt.toLocaleString()}
+              </div>
+            </div>
+          )}
+          {isAdmin ? (
+            <>
+              <button className="btn btn-primary" style={{width:260}} onClick={startAuction}>
+                🔨 {scheduledAt ? 'Start Now (override schedule)' : 'Start Auction'}
+              </button>
+              <p style={{fontSize:12,color:'var(--text-3)',margin:0}}>
+                {itemsTotal} item{itemsTotal!==1?'s':''} queued
+              </p>
+            </>
+          ) : (
+            <p style={{color:'var(--text-3)',fontSize:14,margin:0}}>
+              Waiting for the auctioneer to begin…
+            </p>
+          )}
+        </div>
         {error && <div className="error-msg">{error}</div>}
       </div>
     </>
