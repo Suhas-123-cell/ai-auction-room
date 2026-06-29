@@ -72,7 +72,11 @@ export default function Dashboard() {
   }
 
   async function create(e) {
-    e.preventDefault(); setErr(''); setBusy(true)
+    e.preventDefault(); setErr('')
+    if (!roomName.trim()) return setErr('Room name is required')
+    if (!adminName.trim()) return setErr('Your display name is required')
+    if (items.every(it => !it.name.trim())) return setErr('Add at least one item with a name')
+    setBusy(true)
     try {
       const token = await getToken()
       const room  = await post('/api/rooms/create', {
@@ -102,7 +106,10 @@ export default function Dashboard() {
   }
 
   async function join(e) {
-    e.preventDefault(); setErr(''); setBusy(true)
+    e.preventDefault(); setErr('')
+    if (!code.trim()) return setErr('Room code is required')
+    if (!dname.trim()) return setErr('Display name is required')
+    setBusy(true)
     try {
       const token = await getToken()
       const room  = await post('/api/rooms/join', { code: code.toUpperCase(), display_name: dname, budget: jBudget }, token)
