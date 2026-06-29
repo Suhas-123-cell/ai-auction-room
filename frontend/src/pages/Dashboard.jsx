@@ -35,6 +35,11 @@ export default function Dashboard() {
   const [dname,   setDname]   = useState('')
   const [jBudget, setJBudget] = useState(10000)
 
+  // Schedule & timing
+  const [scheduledAt,      setScheduledAt]      = useState('')
+  const [bidDuration,      setBidDuration]      = useState(30)
+  const [firstBidDuration, setFirstBidDuration] = useState(120)
+
   // My Bids
   const [bids,      setBids]      = useState([])
   const [bidsLoad,  setBidsLoad]  = useState(false)
@@ -70,7 +75,12 @@ export default function Dashboard() {
     e.preventDefault(); setErr(''); setBusy(true)
     try {
       const token = await getToken()
-      const room  = await post('/api/rooms/create', { name: roomName, admin_name: adminName, budget }, token)
+      const room  = await post('/api/rooms/create', {
+        name: roomName, admin_name: adminName, budget,
+        bid_duration: bidDuration,
+        first_bid_duration: firstBidDuration,
+        ...(scheduledAt ? { scheduled_at: new Date(scheduledAt).toISOString() } : {}),
+      }, token)
       for (let i = 0; i < items.length; i++) {
         const it = items[i]; if (!it.name.trim()) continue
         const { _file, photo_url, ...itemData } = it
@@ -175,6 +185,34 @@ export default function Dashboard() {
                 <div className="form-group" style={{marginBottom:0}}>
                   <label className="form-label">Your Budget (₹)</label>
                   <input className="form-input mono" type="number" min="1000" value={budget} onChange={e=>setBudget(Number(e.target.value))} />
+                </div>
+              </div>
+
+              <div className="form-grid-2" style={{marginBottom:20}}>
+                <div className="form-group" style={{marginBottom:0}}>
+                  <label className="form-label">Schedule Start (optional)</label>
+                  <input className="form-input" type="datetime-local"
+                    value={scheduledAt} onChange={e=>setScheduledAt(e.target.value)}
+                    style={{colorScheme:'dark'}} />
+                  <span style={{fontSize:11,color:'var(--text-3)',marginTop:4,display:'block'}}>Leave blank to start manually</span>
+                </div>
+                <div className="form-group" style={{marginBottom:0}}>
+                  <label className="form-label">Opening window (first bid)</label>
+                  <select className="form-input" value={firstBidDuration} onChange={e=>setFirstBidDuration(Number(e.target.value))}>
+                    <option value={60}>1 minute</option>
+                    <option value={120}>2 minutes</option>
+                    <option value={180}>3 minutes</option>
+                    <option value={300}>5 minutes</option>
+                  </select>
+                </div>
+                <div className="form-group" style={{marginBottom:0}}>
+                  <label className="form-label">Timer reset per bid</label>
+                  <select className="form-input" value={bidDuration} onChange={e=>setBidDuration(Number(e.target.value))}>
+                    <option value={15}>15 seconds</option>
+                    <option value={30}>30 seconds</option>
+                    <option value={60}>1 minute</option>
+                    <option value={120}>2 minutes</option>
+                  </select>
                 </div>
               </div>
 

@@ -11,7 +11,7 @@ from ..config import settings
 @dataclass
 class BidRecord:
     user_id: str
-    bidder: str  # display name
+    bidder: str
     amount: int
     placed_at: str
     shill_score: float = 0.0
@@ -28,16 +28,17 @@ class ItemState:
     highest_bidder_id: Optional[str] = None
     highest_bidder_name: Optional[str] = None
     bid_history: list = field(default_factory=list)
-    status: str = "pending"  # pending | active | sold | unsold
+    status: str = "pending"
     council_valuation: Optional[dict] = None
     timer_seconds: int = 0
+    photo_url: Optional[str] = None
 
 
 @dataclass
 class ParticipantState:
     user_id: str
     display_name: str
-    role: str  # admin | participant
+    role: str
     budget: int
     spent: int = 0
     connected: bool = True
@@ -47,12 +48,15 @@ class ParticipantState:
 class RoomState:
     room_id: str
     room_name: str
-    status: str = "lobby"  # lobby | auction | completed
-    participants: dict = field(default_factory=dict)  # user_id -> ParticipantState
-    items: list = field(default_factory=list)  # list[ItemState]
+    status: str = "lobby"
+    participants: dict = field(default_factory=dict)
+    items: list = field(default_factory=list)
     current_item_index: int = -1
     timer_task: Optional[asyncio.Task] = None
     latest_commentary: str = ""
+    bid_duration: int = 30          # timer reset on each bid
+    first_bid_duration: int = 120   # opening window per item
+    scheduled_at: Optional[str] = None
 
 
 class AuctionService:
@@ -60,9 +64,22 @@ class AuctionService:
         self.manager = ws_manager
         self.rooms: dict[str, RoomState] = {}
 
-    def get_or_create_room(self, room_id: str, room_name: str) -> RoomState:
+    def get_or_create_room(
+        self,
+        room_id: str,
+        room_name: str,
+        bid_duration: int = 30,
+        first_bid_duration: int = 120,
+        scheduled_at: Optional[str] = None,
+    ) -> RoomState:
         if room_id not in self.rooms:
-            self.rooms[room_id] = RoomState(room_id=room_id, room_name=room_name)
+            self.rooms[room_id] = RoomState(
+                room_id=room_id,
+                room_name=room_name,
+                bid_duration=bid_duration,
+                first_bid_duration=first_bid_duration,
+                scheduled_at=scheduled_at,
+            )
         return self.rooms[room_id]
 
     def get_room(self, room_id: str) -> Optional[RoomState]:
@@ -77,15 +94,12 @@ class AuctionService:
                 "name": item.name,
                 "description": item.description,
                 "base_price": item.base_price,
+                "photo_url": item.photo_url,
                 "current_bid": item.current_bid,
                 "highest_bidder": item.highest_bidder_name,
                 "bid_history": [
-                    {
-                        "bidder": b.bidder,
-                        "amount": b.amount,
-                        "placed_at": b.placed_at,
-                        "shill_score": b.shill_score,
-                    }
+                    {"bidder": b.bidder, "amount": b.amount,
+                     "placed_at": b.placed_at, "shill_score": b.shill_score}
                     for b in item.bid_history[-20:]
                 ],
                 "status": item.status,
@@ -101,6 +115,9 @@ class AuctionService:
             "items_total": len(room.items),
             "items_completed": sum(1 for i in room.items if i.status in ("sold", "unsold")),
             "latest_commentary": room.latest_commentary,
+            "bid_duration": room.bid_duration,
+            "first_bid_duration": room.first_bid_duration,
+            "scheduled_at": room.scheduled_at,
         }
 
     async def add_participant(
@@ -111,8 +128,13 @@ class AuctionService:
         display_name: str,
         role: str,
         budget: int,
+        bid_duration: int = 30,
+        first_bid_duration: int = 120,
+        scheduled_at: Optional[str] = None,
     ):
-        room = self.get_or_create_room(room_id, room_name)
+        room = self.get_or_create_room(
+            room_id, room_name, bid_duration, first_bid_duration, scheduled_at
+        )
         room.participants[user_id] = ParticipantState(
             user_id=user_id,
             display_name=display_name,
@@ -145,6 +167,7 @@ class AuctionService:
                 base_price=item["base_price"],
                 order_index=item.get("order_index", i),
                 current_bid=item["base_price"],
+                photo_url=item.get("photo_url"),
             )
             for i, item in enumerate(sorted(items, key=lambda x: x.get("order_index", 0)))
         ]
@@ -153,18 +176,33 @@ class AuctionService:
         room = self.get_room(room_id)
         if not room or room.status != "lobby":
             return {"error": "Room not in lobby state"}
-
         participant = room.participants.get(user_id)
         if not participant or participant.role != "admin":
             return {"error": "Only admin can start auction"}
+        await self._do_start(room_id)
+        return {"ok": True}
 
+    async def start_auction_auto(self, room_id: str):
+        """Start auction triggered by scheduler — no admin check."""
+        room = self.get_room(room_id)
+        if not room or room.status != "lobby":
+            return
+        await self._do_start(room_id)
+
+    async def _do_start(self, room_id: str):
+        room = self.get_room(room_id)
         room.status = "auction"
+        # Persist status to DB
+        try:
+            from ..database import get_supabase
+            get_supabase().table("rooms").update({"status": "auction"}).eq("id", room_id).execute()
+        except Exception as e:
+            print(f"DB status update failed: {e}")
         await self.manager.broadcast_to_room(room_id, {
             "type": "auction_started",
             "data": {"status": "auction"},
         })
         await self._advance_to_next_item(room_id)
-        return {"ok": True}
 
     async def _advance_to_next_item(self, room_id: str):
         room = self.get_room(room_id)
@@ -179,12 +217,11 @@ class AuctionService:
         room.current_item_index = next_index
         item = room.items[next_index]
         item.status = "active"
-        item.timer_seconds = settings.AUCTION_TIMER_SECONDS
+        # Opening window: first_bid_duration gives bidders time to see the item
+        item.timer_seconds = room.first_bid_duration
 
-        # Fetch council valuation in background — don't block item start
         asyncio.create_task(self._fetch_council(room_id, item))
 
-        # Starting commentary
         try:
             commentary = await generate_commentary(
                 item.name, item.base_price, item.base_price, 0,
@@ -202,6 +239,7 @@ class AuctionService:
                     "name": item.name,
                     "description": item.description,
                     "base_price": item.base_price,
+                    "photo_url": item.photo_url,
                     "current_bid": item.current_bid,
                     "timer_seconds": item.timer_seconds,
                     "council_valuation": None,
@@ -210,13 +248,11 @@ class AuctionService:
             },
         })
 
-        # Cancel existing timer then start fresh countdown
         if room.timer_task and not room.timer_task.done():
             room.timer_task.cancel()
         room.timer_task = asyncio.create_task(self._run_timer(room_id))
 
     async def _fetch_council(self, room_id: str, item: ItemState):
-        """Background task: fetch and broadcast council valuation."""
         try:
             valuation = await get_council_valuation(item.name, item.base_price)
             item.council_valuation = valuation
@@ -228,35 +264,28 @@ class AuctionService:
             print(f"Council valuation failed for {item.name}: {e}")
 
     async def _run_timer(self, room_id: str):
-        """Server-authoritative countdown timer with closing commentary hooks."""
         room = self.get_room(room_id)
         if not room:
             return
-
         try:
             while True:
                 await asyncio.sleep(1)
                 room = self.get_room(room_id)
                 if not room or room.current_item_index < 0:
                     break
-
                 item = room.items[room.current_item_index]
                 if item.status != "active":
                     break
 
                 item.timer_seconds -= 1
-
                 await self.manager.broadcast_to_room(room_id, {
                     "type": "timer_tick",
                     "data": {"seconds_left": item.timer_seconds},
                 })
 
-                # Generate closing commentary at key moments
                 if item.timer_seconds in (10, 5):
                     try:
-                        bidder_count = len(set(
-                            b.user_id for b in item.bid_history if hasattr(b, "user_id")
-                        ))
+                        bidder_count = len(set(b.user_id for b in item.bid_history))
                         commentary = await generate_commentary(
                             item.name, item.current_bid, item.base_price,
                             bidder_count, item.timer_seconds,
@@ -281,29 +310,25 @@ class AuctionService:
         room = self.get_room(room_id)
         if not room or room.status != "auction":
             return {"error": "Auction not active"}
-
         if room.current_item_index < 0:
             return {"error": "No active item"}
 
         item = room.items[room.current_item_index]
         if item.status != "active":
             return {"error": "Item not active"}
-
         if item.timer_seconds <= 0:
             return {"error": "Bidding time expired"}
 
         participant = room.participants.get(user_id)
         if not participant:
             return {"error": "Not in room"}
-
         if amount <= item.current_bid:
-            return {"error": f"Bid must be higher than current bid of ₹{item.current_bid}"}
+            return {"error": f"Bid must be higher than ₹{item.current_bid}"}
 
         remaining_budget = participant.budget - participant.spent
         if amount > remaining_budget:
             return {"error": f"Insufficient budget. Available: ₹{remaining_budget}"}
 
-        # Build bid record
         bid = BidRecord(
             user_id=user_id,
             bidder=participant.display_name,
@@ -311,13 +336,8 @@ class AuctionService:
             placed_at=datetime.utcnow().isoformat(),
         )
 
-        # Rule-based shill detection
         bid_history_dicts = [
-            {
-                "user_id": b.user_id,
-                "amount": b.amount,
-                "placed_at": b.placed_at,
-            }
+            {"user_id": b.user_id, "amount": b.amount, "placed_at": b.placed_at}
             for b in item.bid_history
         ]
         shill_score, shill_reason = compute_shill_score(bid_history_dicts, user_id)
@@ -328,11 +348,9 @@ class AuctionService:
         item.highest_bidder_id = user_id
         item.highest_bidder_name = participant.display_name
 
-        # Anti-sniping: extend timer by 5s if bid arrives in final 10s
-        if item.timer_seconds < 10:
-            item.timer_seconds = min(item.timer_seconds + 5, 15)
+        # Full timer reset on every bid — "going, going, gone" style
+        item.timer_seconds = room.bid_duration
 
-        # Bid commentary
         try:
             bidder_count = len(set(b.user_id for b in item.bid_history))
             commentary = await generate_commentary(
@@ -352,12 +370,8 @@ class AuctionService:
                 "current_bid": item.current_bid,
                 "highest_bidder": item.highest_bidder_name,
                 "bid_history": [
-                    {
-                        "bidder": b.bidder,
-                        "amount": b.amount,
-                        "placed_at": b.placed_at,
-                        "shill_score": b.shill_score,
-                    }
+                    {"bidder": b.bidder, "amount": b.amount,
+                     "placed_at": b.placed_at, "shill_score": b.shill_score}
                     for b in item.bid_history[-20:]
                 ],
                 "timer_seconds": item.timer_seconds,
@@ -365,7 +379,6 @@ class AuctionService:
             },
         })
 
-        # Alert all admins if shill score is high
         if shill_score >= 0.6:
             admin_ids = [uid for uid, p in room.participants.items() if p.role == "admin"]
             for admin_id in admin_ids:
@@ -393,7 +406,6 @@ class AuctionService:
             winner = room.participants.get(item.highest_bidder_id)
             if winner:
                 winner.spent += item.current_bid
-
             try:
                 commentary = await generate_commentary(
                     item.name, item.current_bid, item.base_price,
@@ -426,7 +438,6 @@ class AuctionService:
             },
         })
 
-        # Brief pause then advance
         await asyncio.sleep(3)
         await self._advance_to_next_item(room_id)
 
@@ -434,8 +445,12 @@ class AuctionService:
         room = self.get_room(room_id)
         if not room:
             return
-
         room.status = "completed"
+        try:
+            from ..database import get_supabase
+            get_supabase().table("rooms").update({"status": "completed"}).eq("id", room_id).execute()
+        except Exception as e:
+            print(f"DB complete update failed: {e}")
 
         results = [
             {
@@ -449,7 +464,6 @@ class AuctionService:
             }
             for item in room.items
         ]
-
         await self.manager.broadcast_to_room(room_id, {
             "type": "auction_completed",
             "data": {
@@ -462,13 +476,10 @@ class AuctionService:
         room = self.get_room(room_id)
         if not room:
             return {"error": "Room not found"}
-
         participant = room.participants.get(user_id)
         if not participant or participant.role != "admin":
             return {"error": "Admin only"}
-
         if room.timer_task and not room.timer_task.done():
             room.timer_task.cancel()
-
         await self._advance_to_next_item(room_id)
         return {"ok": True}

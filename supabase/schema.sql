@@ -4,13 +4,16 @@
 create extension if not exists "pgcrypto";
 
 create table public.rooms (
-  id            uuid primary key default gen_random_uuid(),
-  name          text not null,
-  code          text not null unique,
-  status        text not null default 'lobby' check (status in ('lobby','auction','completed')),
-  admin_id      uuid references auth.users(id),
-  photo_url     text,
-  created_at    timestamptz not null default now()
+  id                 uuid primary key default gen_random_uuid(),
+  name               text not null,
+  code               text not null unique,
+  status             text not null default 'lobby' check (status in ('lobby','auction','completed')),
+  admin_id           uuid references auth.users(id),
+  photo_url          text,
+  scheduled_at       timestamptz,
+  bid_duration       int not null default 30,
+  first_bid_duration int not null default 120,
+  created_at         timestamptz not null default now()
 );
 
 create table public.room_participants (
