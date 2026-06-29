@@ -6,6 +6,7 @@ const INIT = {
   status: 'lobby', roomName: '', participants: [], currentItem: null,
   itemsTotal: 0, itemsCompleted: 0, latestCommentary: '',
   results: null, shillAlerts: [], error: null, connected: false,
+  itemsQueue: [],
 }
 
 export function useAuction(roomId) {
@@ -33,6 +34,7 @@ export function useAuction(roomId) {
                 participants: msg.data.participants, currentItem: msg.data.current_item,
                 itemsTotal: msg.data.items_total, itemsCompleted: msg.data.items_completed,
                 latestCommentary: msg.data.latest_commentary,
+                itemsQueue: msg.data.items_queue ?? [],
               }); break
             case 'participant_update': patch({ participants: msg.data.participants }); break
             case 'auction_started':   patch({ status: 'auction' }); break
@@ -61,7 +63,9 @@ export function useAuction(roomId) {
               })); break
             case 'auction_completed': patch({ status: 'completed', results: msg.data }); break
             case 'item_added':
-              setState(s => ({ ...s, itemsTotal: msg.data.items_total })); break
+              setState(s => ({ ...s, itemsTotal: msg.data.items_total,
+                itemsQueue: [...s.itemsQueue, { id: msg.data.id, name: msg.data.name, photo_url: msg.data.photo_url, status: 'pending', base_price: msg.data.base_price, current_bid: msg.data.base_price }]
+              })); break
             case 'shill_alert':
               setState(s => ({ ...s, shillAlerts: [msg.data, ...s.shillAlerts.slice(0,4)] })); break
             case 'error': patch({ error: msg.data.message }); break
