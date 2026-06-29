@@ -118,6 +118,17 @@ class AuctionService:
             "bid_duration": room.bid_duration,
             "first_bid_duration": room.first_bid_duration,
             "scheduled_at": room.scheduled_at,
+            "items_queue": [
+                {
+                    "id": item.id,
+                    "name": item.name,
+                    "photo_url": item.photo_url,
+                    "status": item.status,
+                    "base_price": item.base_price,
+                    "current_bid": item.current_bid,
+                }
+                for item in room.items
+            ],
         }
 
     async def add_participant(

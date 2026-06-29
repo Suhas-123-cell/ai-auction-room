@@ -22,7 +22,7 @@ export default function AuctionRoom() {
     status, roomName, participants, currentItem,
     itemsTotal, itemsCompleted, latestCommentary,
     results, shillAlerts, error, connected,
-    placeBid, startAuction, nextItem, sendMsg,
+    placeBid, startAuction, nextItem, sendMsg, itemsQueue,
   } = useAuction(roomId)
 
   const [roomCode,      setRoomCode]   = useState('')
@@ -225,18 +225,52 @@ export default function AuctionRoom() {
           <ItemDisplay item={currentItem} lotNumber={lotNum} timerTotal={TIMER_TOTAL} />
           <CouncilValuation valuation={currentItem?.council_valuation} loading={councilLoading} />
 
-          {itemsTotal > 1 && (
+          {itemsQueue.length > 0 && (
             <div className="queue-card">
-              <div className="queue-header">Item Queue</div>
-              <div className="queue-row now">
-                <span className="queue-name">{currentItem?.name ?? '—'}</span>
-                <span className="badge active">now</span>
-              </div>
-              <div className="queue-row">
-                <span className="queue-name" style={{color:'var(--text-3)',fontSize:13}}>
-                  {Math.max(0,itemsTotal-itemsCompleted-1)} more items remaining
+              <div className="queue-header">
+                Item Queue
+                <span style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--text-3)',fontWeight:400,marginLeft:8}}>
+                  {itemsCompleted}/{itemsTotal} done
                 </span>
-                <span className="queue-base">of {itemsTotal} total</span>
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                {itemsQueue.map((item, idx) => {
+                  const isCurrent = item.id === currentItem?.id
+                  const isDone    = item.status === 'sold' || item.status === 'unsold'
+                  return (
+                    <div key={item.id} style={{
+                      display:'flex',alignItems:'center',gap:10,padding:'6px 8px',
+                      borderRadius:'var(--r-sm)',
+                      background: isCurrent ? 'rgba(201,168,76,0.08)' : 'transparent',
+                      border: isCurrent ? '1px solid var(--gold-border)' : '1px solid transparent',
+                      opacity: isDone ? 0.45 : 1,
+                    }}>
+                      <div style={{
+                        width:36,height:36,borderRadius:6,flexShrink:0,overflow:'hidden',
+                        background:'var(--bg-raise)',border:'1px solid rgba(255,255,255,0.08)'
+                      }}>
+                        {item.photo_url
+                          ? <img src={item.photo_url} alt={item.name} style={{width:'100%',height:'100%',objectFit:'cover'}} />
+                          : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,color:'var(--text-3)'}}>🖼</div>
+                        }
+                      </div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{
+                          fontSize:13,fontWeight:600,
+                          color: isCurrent ? 'var(--gold)' : isDone ? 'var(--text-3)' : 'var(--text-1)',
+                          overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'
+                        }}>{item.name}</div>
+                        <div style={{fontSize:11,color:'var(--text-3)',fontFamily:'var(--mono)'}}>
+                          ₹{(item.current_bid || item.base_price).toLocaleString()}
+                        </div>
+                      </div>
+                      {isCurrent && <span className="badge active" style={{fontSize:10,padding:'2px 6px'}}>live</span>}
+                      {item.status==='sold'   && <span style={{fontSize:10,color:'var(--green)',fontWeight:700}}>SOLD</span>}
+                      {item.status==='unsold' && <span style={{fontSize:10,color:'var(--red)',fontWeight:700}}>PASS</span>}
+                      {!isCurrent && !isDone  && <span style={{fontSize:10,color:'var(--text-3)'}>#{idx+1}</span>}
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
@@ -285,34 +319,43 @@ export default function AuctionRoom() {
               <h3 style={{margin:0,fontSize:16,fontFamily:'var(--serif)'}}>Add Item to Queue</h3>
               <button onClick={()=>setShowAddItem(false)} style={{background:'none',border:'none',color:'var(--text-3)',cursor:'pointer',fontSize:20,lineHeight:1}}>×</button>
             </div>
-            <form onSubmit={addItemToRoom} style={{display:'flex',flexDirection:'column',gap:12}}>
+            <form onSubmit={addItemToRoom} style={{display:'flex',flexDirection:'column',gap:14}}>
               <div>
-                <label style={{fontSize:11,color:'var(--gold)',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',display:'block',marginBottom:4}}>Name *</label>
-                <input className="form-input" placeholder="Item name" value={newItem.name} onChange={e=>setNewItem(p=>({...p,name:e.target.value}))} />
+                <label style={{fontSize:10,color:'var(--gold)',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.1em',display:'block',marginBottom:5}}>Item Name *</label>
+                <input className="form-input" placeholder="e.g. Vintage Rolex Daytona" required value={newItem.name} onChange={e=>setNewItem(p=>({...p,name:e.target.value}))} />
               </div>
               <div>
-                <label style={{fontSize:11,color:'var(--text-3)',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',display:'block',marginBottom:4}}>Description</label>
-                <input className="form-input" placeholder="Optional" value={newItem.description} onChange={e=>setNewItem(p=>({...p,description:e.target.value}))} />
+                <label style={{fontSize:10,color:'var(--text-3)',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.1em',display:'block',marginBottom:5}}>Description <span style={{fontWeight:400,textTransform:'none',letterSpacing:0}}>(optional)</span></label>
+                <textarea className="form-input" placeholder="Provenance, condition, edition notes…" rows={2}
+                  value={newItem.description} onChange={e=>setNewItem(p=>({...p,description:e.target.value}))}
+                  style={{resize:'vertical',fontFamily:'var(--sans)',fontSize:13}} />
               </div>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
                 <div>
-                  <label style={{fontSize:11,color:'var(--gold)',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',display:'block',marginBottom:4}}>Starting Bid ₹ *</label>
-                  <input className="form-input mono" type="number" min="1" value={newItem.base_price} onChange={e=>setNewItem(p=>({...p,base_price:e.target.value}))} />
+                  <label style={{fontSize:10,color:'var(--gold)',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.1em',display:'block',marginBottom:5}}>Starting Bid ₹ *</label>
+                  <input className="form-input mono" type="number" min="1" required value={newItem.base_price} onChange={e=>setNewItem(p=>({...p,base_price:e.target.value}))} />
                 </div>
                 <div>
-                  <label style={{fontSize:11,color:'var(--gold)',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',display:'block',marginBottom:4}}>Photo *</label>
-                  <label style={{cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--bg-raise)',border:newItemPreview?'1px solid rgba(255,255,255,0.12)':'1px dashed rgba(239,68,68,0.5)',borderRadius:'var(--r-sm)',height:36,overflow:'hidden',position:'relative'}}>
+                  <label style={{fontSize:10,color:'var(--gold)',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.1em',display:'block',marginBottom:5}}>Photo *</label>
+                  <label style={{cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',
+                    background:'var(--bg-raise)',
+                    border: newItemPreview ? '1px solid rgba(255,255,255,0.15)' : '1px dashed rgba(239,68,68,0.6)',
+                    borderRadius:'var(--r-sm)',height:60,overflow:'hidden',position:'relative'}}>
                     {newItemPreview
                       ? <img src={newItemPreview} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
-                      : <span style={{fontSize:10,color:'rgba(239,68,68,0.8)',fontWeight:600}}>📷 Required</span>}
+                      : <div style={{textAlign:'center'}}>
+                          <div style={{fontSize:18,marginBottom:2}}>📷</div>
+                          <div style={{fontSize:9,color:'rgba(239,68,68,0.9)',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em'}}>Required</div>
+                        </div>
+                    }
                     <input type="file" accept="image/*" style={{position:'absolute',inset:0,opacity:0,cursor:'pointer'}}
                       onChange={e=>{const f=e.target.files?.[0];if(f){setNewItemFile(f);setNewItemPrev(URL.createObjectURL(f))}}} />
                   </label>
                 </div>
               </div>
-              {addItemErr && <div style={{fontSize:12,color:'var(--red)'}}>{addItemErr}</div>}
-              <button className="btn btn-primary" type="submit" disabled={addingItem} style={{marginTop:4}}>
-                {addingItem ? 'Adding…' : 'Add to Queue →'}
+              {addItemErr && <div style={{fontSize:12,color:'var(--red)',padding:'6px 0'}}>{addItemErr}</div>}
+              <button className="btn btn-primary" type="submit" disabled={addingItem} style={{marginTop:2}}>
+                {addingItem ? 'Adding to queue…' : '+ Add to Queue'}
               </button>
             </form>
           </div>
