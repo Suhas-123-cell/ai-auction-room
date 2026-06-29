@@ -1,6 +1,6 @@
 import random
 import string
-from fastapi import APIRouter, HTTPException, Header, Depends
+from fastapi import APIRouter, HTTPException, Header, Depends, UploadFile, File
 from ..database import verify_token, get_supabase
 from ..models import RoomCreate, RoomJoin, ItemCreate
 
@@ -114,3 +114,23 @@ async def get_results(room_id: str, user_id: str = Depends(get_user_id)):
         "participants": participants.data,
         "total_bids": len(bids.data),
     }
+
+
+@router.post("/{room_id}/items/{item_id}/photo")
+async def upload_item_photo(
+    room_id: str,
+    item_id: str,
+    file: UploadFile = File(...),
+    user_id: str = Depends(get_user_id),
+):
+    sb = get_supabase()
+    content = await file.read()
+    ext = (file.filename or "photo.jpg").rsplit(".", 1)[-1].lower()
+    path = f"{room_id}/{item_id}.{ext}"
+    sb.storage.from_("item-photos").upload(
+        path, content,
+        {"content-type": file.content_type or "image/jpeg", "upsert": "true"}
+    )
+    pub_url = sb.storage.from_("item-photos").get_public_url(path)
+    sb.table("items").update({"photo_url": pub_url}).eq("id", item_id).execute()
+    return {"photo_url": pub_url}
