@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useAuth } from '../hooks/useAuth.js'
 import { useAuction } from '../hooks/useAuction.js'
 import { getToken } from '../lib/supabase.js'
@@ -22,13 +22,19 @@ export default function AuctionRoom() {
     status, roomName, participants, currentItem,
     itemsTotal, itemsCompleted, latestCommentary,
     results, shillAlerts, error, connected,
-    placeBid, startAuction, nextItem,
+    placeBid, startAuction, nextItem, sendMsg,
   } = useAuction(roomId)
 
   const [roomCode,      setRoomCode]   = useState('')
   const [scheduledAt,   setScheduledAt] = useState(null)
   const [countdown,     setCountdown]   = useState('')
   const [councilLoading, setCLoading]  = useState(false)
+  const [showAddItem,   setShowAddItem] = useState(false)
+  const [newItem,       setNewItem]     = useState({name:'',description:'',base_price:500})
+  const [newItemFile,   setNewItemFile] = useState(null)
+  const [newItemPreview,setNewItemPrev] = useState('')
+  const [addingItem,    setAddingItem]  = useState(false)
+  const [addItemErr,    setAddItemErr]  = useState('')
 
   const me      = participants.find(p => p.user_id === user?.id)
   const isAdmin = me?.role === 'admin'
@@ -67,6 +73,31 @@ export default function AuctionRoom() {
     if (status==='completed') setTimeout(() => nav(`/room/${roomId}/results`,{state:{results,roomName}}), 2500)
   }, [status])
 
+
+  async function addItemToRoom(e) {
+    e.preventDefault()
+    if (!newItem.name.trim()) return setAddItemErr('Name is required')
+    if (!newItemFile) return setAddItemErr('Photo is required')
+    setAddingItem(true); setAddItemErr('')
+    try {
+      const token = await getToken()
+      const r = await fetch(`${API}/api/rooms/${roomId}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ...newItem, base_price: Number(newItem.base_price), order_index: 999 }),
+      })
+      if (!r.ok) { const d = await r.json(); throw new Error(d.detail ?? 'Failed') }
+      const row = await r.json()
+      const fd = new FormData(); fd.append('file', newItemFile)
+      await fetch(`${API}/api/rooms/${roomId}/items/${row.id}/photo`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
+      })
+      setNewItem({name:'',description:'',base_price:500})
+      setNewItemFile(null); setNewItemPrev(''); setShowAddItem(false)
+    } catch(ex) { setAddItemErr(ex.message) }
+    finally { setAddingItem(false) }
+  }
+
   if (!connected && !error) return (
     <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',flexDirection:'column',gap:16}}>
       <span className="spinner" style={{width:28,height:28,borderWidth:3}} />
@@ -78,7 +109,12 @@ export default function AuctionRoom() {
   if (status==='lobby') return (
     <>
       <header className="app-header">
-        <div className="logo">AI <span>Auction</span> Room</div>
+        <div style={{display:'flex',alignItems:'center',gap:16}}>
+          <button onClick={()=>nav('/dashboard')} style={{background:'none',border:'none',color:'var(--text-3)',cursor:'pointer',fontSize:13,padding:'4px 0',display:'flex',alignItems:'center',gap:6}}>
+            ← Dashboard
+          </button>
+          <div className="logo">AI <span>Auction</span> Room</div>
+        </div>
         <div className="header-right">
           <span className="badge pending">Lobby</span>
           <span style={{fontSize:12,color:'var(--text-3)'}}>{participants.length} joined</span>
@@ -148,8 +184,18 @@ export default function AuctionRoom() {
   return (
     <>
       <header className="app-header">
-        <div className="logo">AI <span>Auction</span> Room</div>
+        <div style={{display:'flex',alignItems:'center',gap:16}}>
+          <button onClick={()=>nav('/dashboard')} style={{background:'none',border:'none',color:'var(--text-3)',cursor:'pointer',fontSize:13,padding:'4px 0',display:'flex',alignItems:'center',gap:6}}>
+            ← Dashboard
+          </button>
+          <div className="logo">AI <span>Auction</span> Room</div>
+        </div>
         <div className="header-right" style={{gap:12}}>
+          {isAdmin && (
+            <button onClick={()=>setShowAddItem(true)} style={{background:'rgba(201,168,76,0.1)',border:'1px solid var(--gold-border)',color:'var(--gold)',borderRadius:'var(--r-sm)',padding:'5px 12px',fontSize:12,fontWeight:600,cursor:'pointer'}}>
+              + Add Item
+            </button>
+          )}
           <span className="badge active" style={{display:'flex',alignItems:'center',gap:6}}>
             <span style={{width:6,height:6,borderRadius:'50%',background:'var(--green)',animation:'livePulse 2s infinite',display:'inline-block'}} />
             Live
@@ -228,6 +274,47 @@ export default function AuctionRoom() {
           <div className="overlay-card">
             <div className="overlay-title">🔨 Auction Complete</div>
             <p className="overlay-sub">Redirecting to results…</p>
+          </div>
+        </div>
+      )}
+      {/* Add Item Modal */}
+      {showAddItem && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}} onClick={()=>setShowAddItem(false)}>
+          <div style={{background:'var(--bg-card)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:'var(--r)',padding:28,width:400,maxWidth:'90vw'}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
+              <h3 style={{margin:0,fontSize:16,fontFamily:'var(--serif)'}}>Add Item to Queue</h3>
+              <button onClick={()=>setShowAddItem(false)} style={{background:'none',border:'none',color:'var(--text-3)',cursor:'pointer',fontSize:20,lineHeight:1}}>×</button>
+            </div>
+            <form onSubmit={addItemToRoom} style={{display:'flex',flexDirection:'column',gap:12}}>
+              <div>
+                <label style={{fontSize:11,color:'var(--gold)',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',display:'block',marginBottom:4}}>Name *</label>
+                <input className="form-input" placeholder="Item name" value={newItem.name} onChange={e=>setNewItem(p=>({...p,name:e.target.value}))} />
+              </div>
+              <div>
+                <label style={{fontSize:11,color:'var(--text-3)',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',display:'block',marginBottom:4}}>Description</label>
+                <input className="form-input" placeholder="Optional" value={newItem.description} onChange={e=>setNewItem(p=>({...p,description:e.target.value}))} />
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+                <div>
+                  <label style={{fontSize:11,color:'var(--gold)',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',display:'block',marginBottom:4}}>Starting Bid ₹ *</label>
+                  <input className="form-input mono" type="number" min="1" value={newItem.base_price} onChange={e=>setNewItem(p=>({...p,base_price:e.target.value}))} />
+                </div>
+                <div>
+                  <label style={{fontSize:11,color:'var(--gold)',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',display:'block',marginBottom:4}}>Photo *</label>
+                  <label style={{cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--bg-raise)',border:newItemPreview?'1px solid rgba(255,255,255,0.12)':'1px dashed rgba(239,68,68,0.5)',borderRadius:'var(--r-sm)',height:36,overflow:'hidden',position:'relative'}}>
+                    {newItemPreview
+                      ? <img src={newItemPreview} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
+                      : <span style={{fontSize:10,color:'rgba(239,68,68,0.8)',fontWeight:600}}>📷 Required</span>}
+                    <input type="file" accept="image/*" style={{position:'absolute',inset:0,opacity:0,cursor:'pointer'}}
+                      onChange={e=>{const f=e.target.files?.[0];if(f){setNewItemFile(f);setNewItemPrev(URL.createObjectURL(f))}}} />
+                  </label>
+                </div>
+              </div>
+              {addItemErr && <div style={{fontSize:12,color:'var(--red)'}}>{addItemErr}</div>}
+              <button className="btn btn-primary" type="submit" disabled={addingItem} style={{marginTop:4}}>
+                {addingItem ? 'Adding…' : 'Add to Queue →'}
+              </button>
+            </form>
           </div>
         </div>
       )}

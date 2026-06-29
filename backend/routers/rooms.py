@@ -2,6 +2,7 @@ import random
 import string
 from fastapi import APIRouter, HTTPException, Header, Depends, UploadFile, File
 from ..database import verify_token, get_supabase
+from ..services.registry import auction_service
 from ..models import RoomCreate, RoomJoin, ItemCreate
 
 router = APIRouter()
@@ -104,7 +105,32 @@ async def add_item(room_id: str, body: ItemCreate, user_id: str = Depends(get_us
         "order_index": body.order_index,
         **({"photo_url": body.photo_url} if body.photo_url else {}),
     }).execute()
-    return item.data[0]
+    row = item.data[0]
+    # If auction is live, append to in-memory queue and notify clients
+    room_state = auction_service.get_room(room_id)
+    if room_state:
+        from ..services.auction import ItemState
+        import asyncio
+        new_item = ItemState(
+            id=row["id"], name=row["name"],
+            description=row.get("description", ""),
+            base_price=row["base_price"],
+            order_index=len(room_state.items),
+            current_bid=row["base_price"],
+            photo_url=row.get("photo_url"),
+        )
+        room_state.items.append(new_item)
+        asyncio.create_task(auction_service.manager.broadcast_to_room(room_id, {
+            "type": "item_added",
+            "data": {
+                "id": row["id"], "name": row["name"],
+                "description": row.get("description",""),
+                "base_price": row["base_price"],
+                "photo_url": row.get("photo_url"),
+                "items_total": len(room_state.items),
+            },
+        }))
+    return row
 
 
 @router.get("/{room_id}/results")

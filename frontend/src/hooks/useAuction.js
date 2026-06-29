@@ -60,6 +60,8 @@ export function useAuction(roomId) {
                 latestCommentary: msg.data.commentary,
               })); break
             case 'auction_completed': patch({ status: 'completed', results: msg.data }); break
+            case 'item_added':
+              setState(s => ({ ...s, itemsTotal: msg.data.items_total })); break
             case 'shill_alert':
               setState(s => ({ ...s, shillAlerts: [msg.data, ...s.shillAlerts.slice(0,4)] })); break
             case 'error': patch({ error: msg.data.message }); break
@@ -77,5 +79,6 @@ export function useAuction(roomId) {
     placeBid:     useCallback((amount) => sendRef.current?.('place_bid', { amount }), []),
     startAuction: useCallback(() => sendRef.current?.('start_auction'), []),
     nextItem:     useCallback(() => sendRef.current?.('next_item'), []),
+    sendMsg:      useCallback((type, data) => sendRef.current?.(type, data), []),
   }
 }
