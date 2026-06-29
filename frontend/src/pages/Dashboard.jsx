@@ -75,7 +75,12 @@ export default function Dashboard() {
     e.preventDefault(); setErr('')
     if (!roomName.trim()) return setErr('Room name is required')
     if (!adminName.trim()) return setErr('Your display name is required')
-    if (items.every(it => !it.name.trim())) return setErr('Add at least one item with a name')
+    const namedItems = items.filter(it => it.name.trim())
+    if (namedItems.length === 0) return setErr('Add at least one item with a name')
+    const missingPhoto = namedItems.find(it => !it._file && !it.photo_url)
+    if (missingPhoto) return setErr(`"${missingPhoto.name}" needs a photo`)
+    const missingPrice = namedItems.find(it => !it.base_price || Number(it.base_price) < 1)
+    if (missingPrice) return setErr(`"${missingPrice.name}" needs a starting bid`)
     setBusy(true)
     try {
       const token = await getToken()
@@ -229,8 +234,8 @@ export default function Dashboard() {
 
               <div style={{background:'var(--bg-raise)',borderRadius:'var(--r)',padding:'6px',marginBottom:12}}>
                 <div style={{display:'grid',gridTemplateColumns:'2fr 2fr 90px 90px 36px',gap:6,padding:'6px 8px',marginBottom:4}}>
-                  {['Name','Description','Base ₹','Photo URL',''].map(h => (
-                    <div key={h} style={{fontSize:10,fontWeight:700,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.08em'}}>{h}</div>
+                  {['Name *','Description','Base ₹ *','Photo *',''].map(h => (
+                    <div key={h} style={{fontSize:10,fontWeight:700,color: h.endsWith('*') ? 'var(--gold)' : 'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.08em'}}>{h}</div>
                   ))}
                 </div>
                 <div className="items-list">
@@ -240,11 +245,12 @@ export default function Dashboard() {
                       <input className="form-input" placeholder="Description" value={it.description} onChange={e=>upd(i,'description',e.target.value)} />
                       <input className="form-input mono" type="number" min="1" value={it.base_price} onChange={e=>upd(i,'base_price',e.target.value)} />
                       <label style={{cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',
-        background:'var(--bg-raise)',border:'1px dashed rgba(255,255,255,0.12)',borderRadius:'var(--r-sm)',
-        height:36,overflow:'hidden',position:'relative'}}>
+        background:'var(--bg-raise)',
+        border: it.photo_url ? '1px solid rgba(255,255,255,0.12)' : '1px dashed rgba(239,68,68,0.5)',
+        borderRadius:'var(--r-sm)',height:36,overflow:'hidden',position:'relative'}}>
         {it.photo_url
           ? <img src={it.photo_url} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}} />
-          : <span style={{fontSize:11,color:'var(--text-3)'}}>📷 Photo</span>}
+          : <span style={{fontSize:10,color:'rgba(239,68,68,0.8)',fontWeight:600}}>📷 Required</span>}
         <input type="file" accept="image/*" style={{position:'absolute',inset:0,opacity:0,cursor:'pointer'}}
           onChange={e=>{const f=e.target.files?.[0];if(f){const u=URL.createObjectURL(f);upd(i,'photo_url',u);upd(i,'_file',f)}}} />
       </label>
