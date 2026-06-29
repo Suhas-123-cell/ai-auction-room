@@ -11,7 +11,7 @@ import AuctioneerTicker from '../components/AuctioneerTicker.jsx'
 import ParticipantsList from '../components/ParticipantsList.jsx'
 import Timer from '../components/Timer.jsx'
 
-const API        = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+const API        = import.meta.env.VITE_API_URL || ''
 const TIMER_TOTAL = Number(import.meta.env.VITE_AUCTION_TIMER ?? 30)
 
 export default function AuctionRoom() {

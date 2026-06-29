@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth.js'
 import { getToken } from '../lib/supabase.js'
 
-const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+const API = import.meta.env.VITE_API_URL || ''
 
 async function post(path, body, token) {
   const r = await fetch(`${API}${path}`, {
@@ -44,6 +44,21 @@ export default function Dashboard() {
   const [bids,      setBids]      = useState([])
   const [bidsLoad,  setBidsLoad]  = useState(false)
   const [deleting,  setDeleting]  = useState(null)
+
+  // Auction history
+  const [myRooms,    setMyRooms]   = useState([])
+  const [roomsLoad,  setRoomsLoad] = useState(false)
+
+  const loadMyRooms = useCallback(async () => {
+    setRoomsLoad(true)
+    try {
+      const token = await getToken()
+      const r = await fetch(`${API}/api/rooms/mine`, { headers: { Authorization: `Bearer ${token}` } })
+      if (r.ok) setMyRooms(await r.json())
+    } finally { setRoomsLoad(false) }
+  }, [])
+
+  useEffect(() => { if (mode === 'history') loadMyRooms() }, [mode, loadMyRooms])
 
   const loadBids = useCallback(async () => {
     setBidsLoad(true)
@@ -174,11 +189,19 @@ export default function Dashboard() {
                 View bids
               </button>
             </div>
+            <div className="action-card" onClick={()=>setMode('history')}>
+              <div className="action-card-icon">🏛️</div>
+              <h3>Auction History</h3>
+              <p>View all auctions you have conducted, items sold, total bids placed, and auction status.</p>
+              <button className="btn btn-ghost" style={{width:'auto',padding:'10px 24px'}} onClick={e=>{e.stopPropagation();setMode('history')}}>
+                View history
+              </button>
+            </div>
           </div>
         )}
 
         {mode==='create' && (
-          <div className="form-panel">
+          <div className="form-panel" style={{margin:'0 auto'}}>
             <div className="form-panel-header">
               <h3>Create Auction Room</h3>
               <button className="btn btn-ghost" style={{width:'auto',padding:'6px 14px',fontSize:12}} onClick={()=>setMode(null)}>← Back</button>
@@ -271,8 +294,90 @@ export default function Dashboard() {
           </div>
         )}
 
+        {mode==='history' && (
+          <div className="form-panel" style={{maxWidth:860,margin:'0 auto'}}>
+            <div className="form-panel-header">
+              <h3>Auction History</h3>
+              <button className="btn btn-ghost" style={{width:'auto',padding:'6px 14px',fontSize:12}} onClick={()=>{setMode(null);setErr('')}}>← Back</button>
+            </div>
+
+            {roomsLoad && <div style={{textAlign:'center',padding:'40px 0',color:'var(--text-3)'}}>Loading…</div>}
+
+            {!roomsLoad && myRooms.length === 0 && (
+              <div style={{textAlign:'center',padding:'48px 0',color:'var(--text-3)'}}>
+                <div style={{fontSize:36,marginBottom:12}}>🏛️</div>
+                <div>No auctions conducted yet. Create your first room above.</div>
+              </div>
+            )}
+
+            {!roomsLoad && myRooms.length > 0 && (
+              <div style={{display:'flex',flexDirection:'column',gap:12}}>
+                {myRooms.map(r => {
+                  const sold   = r.items.filter(i=>i.status==='sold')
+                  const unsold = r.items.filter(i=>i.status==='unsold')
+                  const statusColor = r.status==='completed'?'var(--text-3)':r.status==='auction'?'var(--gold)':'#60a5fa'
+                  const totalEarned = sold.reduce((s,i)=>s+(i.current_bid||i.base_price),0)
+                  return (
+                    <div key={r.id} style={{
+                      padding:'16px 20px',background:'var(--bg-raise)',borderRadius:'var(--r)',
+                      border:'1px solid rgba(255,255,255,0.06)',display:'grid',
+                      gridTemplateColumns:'1fr auto',gap:16,alignItems:'start'
+                    }}>
+                      <div>
+                        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:6}}>
+                          <span style={{fontFamily:'var(--serif)',fontWeight:700,fontSize:16}}>{r.name}</span>
+                          <span style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--text-3)',background:'var(--bg-void)',padding:'2px 8px',borderRadius:4}}>{r.code}</span>
+                          <span style={{fontSize:11,fontWeight:600,color:statusColor,textTransform:'capitalize'}}>{r.status}</span>
+                        </div>
+                        <div style={{display:'flex',gap:24,fontSize:12,color:'var(--text-3)'}}>
+                          <span>📦 {r.items.length} item{r.items.length!==1?'s':''}</span>
+                          <span style={{color:'var(--green)'}}>✓ {sold.length} sold</span>
+                          {unsold.length>0 && <span style={{color:'var(--red)'}}>✗ {unsold.length} unsold</span>}
+                          <span>🔨 {r.total_bids} bid{r.total_bids!==1?'s':''}</span>
+                          {totalEarned>0 && <span style={{color:'var(--gold)',fontWeight:600}}>₹{totalEarned.toLocaleString()} earned</span>}
+                        </div>
+                        {r.items.length>0 && (
+                          <div style={{marginTop:8,display:'flex',flexWrap:'wrap',gap:6}}>
+                            {r.items.map(i=>(
+                              <span key={i.id} style={{fontSize:11,padding:'2px 8px',borderRadius:4,
+                                background: i.status==='sold'?'rgba(34,197,94,0.1)':i.status==='unsold'?'rgba(239,68,68,0.1)':'var(--bg-void)',
+                                color: i.status==='sold'?'var(--green)':i.status==='unsold'?'var(--red)':'var(--text-3)',
+                                border:'1px solid rgba(255,255,255,0.06)'
+                              }}>
+                                {i.name}{i.status==='sold'?` · ₹${(i.current_bid||0).toLocaleString()}`:''}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{textAlign:'right',fontSize:11,color:'var(--text-3)'}}>
+                        <div>{new Date(r.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</div>
+                        {r.status==='lobby' && (
+                          <button className="btn btn-ghost" style={{marginTop:8,width:'auto',padding:'4px 10px',fontSize:11}}
+                            onClick={()=>nav(`/room/${r.id}`)}>
+                            Open →
+                          </button>
+                        )}
+                        {r.status==='auction' && (
+                          <button className="btn btn-primary" style={{marginTop:8,width:'auto',padding:'4px 10px',fontSize:11}}
+                            onClick={()=>nav(`/room/${r.id}`)}>
+                            Rejoin →
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+                <div style={{fontSize:12,color:'var(--text-3)',marginTop:4}}>
+                  {myRooms.length} auction{myRooms.length!==1?'s':''} conducted
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {mode==='bids' && (
-          <div className="form-panel" style={{maxWidth:820}}>
+          <div className="form-panel" style={{maxWidth:820,margin:'0 auto'}}>
             <div className="form-panel-header">
               <h3>My Bid History</h3>
               <button className="btn btn-ghost" style={{width:'auto',padding:'6px 14px',fontSize:12}} onClick={()=>{setMode(null);setErr('')}}>← Back</button>
@@ -349,7 +454,7 @@ export default function Dashboard() {
         )}
 
         {mode==='join' && (
-          <div className="form-panel" style={{maxWidth:440}}>
+          <div className="form-panel" style={{maxWidth:440,margin:'0 auto'}}>
             <div className="form-panel-header">
               <h3>Join Auction Room</h3>
               <button className="btn btn-ghost" style={{width:'auto',padding:'6px 14px',fontSize:12}} onClick={()=>setMode(null)}>← Back</button>
