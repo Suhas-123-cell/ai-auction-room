@@ -146,6 +146,29 @@ async def get_results(room_id: str, user_id: str = Depends(get_user_id)):
     }
 
 
+
+@router.get("/mine")
+async def my_rooms(user_id: str = Depends(get_user_id)):
+    sb = get_supabase()
+    rooms = (
+        sb.table("rooms")
+        .select("id,name,code,status,created_at,scheduled_at,bid_duration,first_bid_duration")
+        .eq("admin_id", user_id)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    result = []
+    for r in rooms.data:
+        items_r = sb.table("items").select("id,name,status,current_bid,base_price").eq("room_id", r["id"]).execute()
+        bids_r  = sb.table("bids").select("id").eq("room_id", r["id"]).execute()
+        result.append({
+            **r,
+            "items": items_r.data,
+            "total_bids": len(bids_r.data),
+        })
+    return result
+
+
 @router.post("/{room_id}/items/{item_id}/photo")
 async def upload_item_photo(
     room_id: str,
