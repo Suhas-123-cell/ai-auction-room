@@ -26,6 +26,8 @@ export default function AuctionRoom() {
   } = useAuction(roomId)
 
   const [roomCode,      setRoomCode]   = useState('')
+  const [scheduledAt,   setScheduledAt] = useState(null)
+  const [countdown,     setCountdown]   = useState('')
   const [councilLoading, setCLoading]  = useState(false)
 
   const me      = participants.find(p => p.user_id === user?.id)
@@ -37,10 +39,24 @@ export default function AuctionRoom() {
     getToken().then(token =>
       fetch(`${API}/api/rooms/${roomId}`, { headers: { Authorization: `Bearer ${token}` } })
         .then(r => r.ok ? r.json() : null)
-        .then(d => { if (d?.code) setRoomCode(d.code) })
+        .then(d => {
+          if (d?.code) setRoomCode(d.code)
+          if (d?.scheduled_at) setScheduledAt(new Date(d.scheduled_at))
+        })
         .catch(()=>{})
     )
   }, [roomId])
+
+  useEffect(() => {
+    if (!scheduledAt) return
+    const tick = () => {
+      const diff = scheduledAt - Date.now()
+      if (diff <= 0) { setCountdown('Starting now…'); return }
+      const h = Math.floor(diff/3600000), m = Math.floor((diff%3600000)/60000), s = Math.floor((diff%60000)/1000)
+      setCountdown(h > 0 ? `${h}h ${m}m ${s}s` : m > 0 ? `${m}m ${s}s` : `${s}s`)
+    }
+    tick(); const id = setInterval(tick, 1000); return () => clearInterval(id)
+  }, [scheduledAt])
 
   useEffect(() => {
     if (currentItem?.status==='active' && !currentItem.council_valuation) setCLoading(true)
@@ -88,13 +104,29 @@ export default function AuctionRoom() {
         </div>
         {isAdmin ? (
           <div style={{textAlign:'center'}}>
+            {scheduledAt && countdown && (
+              <div style={{marginBottom:16,padding:'12px 24px',background:'rgba(201,168,76,0.08)',border:'1px solid var(--gold-border)',borderRadius:'var(--r)',display:'inline-block'}}>
+                <div style={{fontSize:11,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:4}}>Scheduled start</div>
+                <div style={{fontFamily:'var(--mono)',fontSize:22,fontWeight:700,color:'var(--gold)'}}>{countdown}</div>
+                <div style={{fontSize:11,color:'var(--text-3)',marginTop:4}}>{scheduledAt.toLocaleString()}</div>
+              </div>
+            )}
             <button className="btn btn-primary" style={{width:220,marginBottom:8}} onClick={startAuction}>
-              🔨 Start Auction
+              🔨 {scheduledAt ? 'Start Now (override)' : 'Start Auction'}
             </button>
             <p style={{fontSize:12,color:'var(--text-3)'}}>{itemsTotal} item{itemsTotal!==1?'s':''} queued</p>
           </div>
         ) : (
-          <p style={{color:'var(--text-3)',fontSize:14}}>Waiting for the auctioneer to begin…</p>
+          <div style={{textAlign:'center'}}>
+            {scheduledAt && countdown && (
+              <div style={{marginBottom:16,padding:'12px 24px',background:'rgba(201,168,76,0.08)',border:'1px solid var(--gold-border)',borderRadius:'var(--r)',display:'inline-block'}}>
+                <div style={{fontSize:11,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:4}}>Auction starts in</div>
+                <div style={{fontFamily:'var(--mono)',fontSize:22,fontWeight:700,color:'var(--gold)'}}>{countdown}</div>
+                <div style={{fontSize:11,color:'var(--text-3)',marginTop:4}}>{scheduledAt.toLocaleString()}</div>
+              </div>
+            )}
+            <p style={{color:'var(--text-3)',fontSize:14}}>Waiting for the auctioneer to begin…</p>
+          </div>
         )}
         {error && <div className="error-msg">{error}</div>}
       </div>

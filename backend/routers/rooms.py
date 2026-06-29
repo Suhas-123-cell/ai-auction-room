@@ -25,6 +25,9 @@ async def create_room(body: RoomCreate, user_id: str = Depends(get_user_id)):
         "code": code,
         "name": body.name,
         "admin_id": user_id,
+        "bid_duration": body.bid_duration,
+        "first_bid_duration": body.first_bid_duration,
+        **( {"scheduled_at": body.scheduled_at} if body.scheduled_at else {} ),
     }).execute()
 
     room_data = room.data[0]
