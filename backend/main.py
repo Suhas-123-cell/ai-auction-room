@@ -7,13 +7,9 @@ from fastapi.responses import StreamingResponse
 
 from .config import settings
 from .database import verify_token, get_supabase
-from .ws_manager import ConnectionManager
-from .services.auction import AuctionService
+from .services.registry import manager, auction_service
 from .services.auctioneer import stream_commentary
 from .routers import auth, rooms
-
-manager = ConnectionManager()
-auction_service = AuctionService(manager)
 
 app = FastAPI(title="AI Auction Room")
 
