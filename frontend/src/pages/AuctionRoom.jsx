@@ -267,7 +267,7 @@ export default function AuctionRoom() {
                       {isCurrent && <span className="badge active" style={{fontSize:10,padding:'2px 6px'}}>live</span>}
                       {item.status==='sold'   && <span style={{fontSize:10,color:'var(--green)',fontWeight:700}}>SOLD</span>}
                       {item.status==='unsold' && <span style={{fontSize:10,color:'var(--red)',fontWeight:700}}>PASS</span>}
-                      {!isCurrent && !isDone  && <span style={{fontSize:10,color:'var(--text-3)'}>#{idx+1}</span>}
+                      {!isCurrent && !isDone  && <span style={{fontSize:10,color:'var(--text-3)'}}>{'#'+(idx+1)}</span>}
                     </div>
                   )
                 })}
