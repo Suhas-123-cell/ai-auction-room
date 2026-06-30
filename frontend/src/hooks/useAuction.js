@@ -39,7 +39,13 @@ export function useAuction(roomId) {
             case 'participant_update': patch({ participants: msg.data.participants }); break
             case 'auction_started':   patch({ status: 'auction' }); break
             case 'item_started':
-              patch({ currentItem: msg.data.item, latestCommentary: msg.data.commentary }); break
+              setState(s => ({ ...s,
+                currentItem: msg.data.item, latestCommentary: msg.data.commentary,
+                itemsQueue: s.itemsQueue.map(q => q.id === msg.data.item.id
+                  ? { ...q, status: 'active' }
+                  : q.status === 'active' ? { ...q, status: 'pending' } : q
+                ),
+              })); break
             case 'bid_update':
               setState(s => ({ ...s,
                 currentItem: s.currentItem ? {
@@ -48,6 +54,10 @@ export function useAuction(roomId) {
                   bid_history: msg.data.bid_history, timer_seconds: msg.data.timer_seconds,
                 } : null,
                 latestCommentary: msg.data.commentary,
+                itemsQueue: s.itemsQueue.map(q => q.id === s.currentItem?.id
+                  ? { ...q, current_bid: msg.data.current_bid }
+                  : q
+                ),
               })); break
             case 'timer_tick':
               setState(s => ({ ...s, currentItem: s.currentItem
@@ -60,6 +70,10 @@ export function useAuction(roomId) {
               setState(s => ({ ...s, itemsCompleted: s.itemsCompleted + 1,
                 currentItem: s.currentItem ? { ...s.currentItem, status: msg.data.status } : null,
                 latestCommentary: msg.data.commentary,
+                itemsQueue: s.itemsQueue.map(q => q.id === s.currentItem?.id
+                  ? { ...q, status: msg.data.status }
+                  : q
+                ),
               })); break
             case 'auction_completed': patch({ status: 'completed', results: msg.data }); break
             case 'item_added':

@@ -95,7 +95,7 @@ export default function Login() {
         </form>
 
         <div className="demo-hint">
-          Demo credentials: <code>demo@auction.ai</code> / <code>demo1234</code>
+          New here? Click <strong>Sign up</strong> to create a free account.
         </div>
       </div>
     </div>

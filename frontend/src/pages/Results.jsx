@@ -2,7 +2,7 @@ import { useParams, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { getToken } from '../lib/supabase.js'
 
-const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+const API = import.meta.env.VITE_API_URL || ''
 
 export default function Results() {
   const { roomId }   = useParams()
