@@ -191,8 +191,13 @@ async def get_results(room_id: str, user_id: str = Depends(get_user_id)):
     items = sb.table("items").select("*").eq("room_id", room_id).order("order_index").execute()
     participants = sb.table("room_participants").select("*").eq("room_id", room_id).execute()
     bids = sb.table("bids").select("*").eq("room_id", room_id).execute()
+    # Map DB column names to frontend-expected field names
+    mapped_items = [
+        {**item, "winner": item.get("winner_name"), "sold_price": item.get("sold_price") or item.get("current_bid") if item.get("status") == "sold" else None}
+        for item in items.data
+    ]
     return {
-        "items": items.data,
+        "items": mapped_items,
         "participants": participants.data,
         "total_bids": len(bids.data),
     }

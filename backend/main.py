@@ -102,6 +102,7 @@ async def websocket_endpoint(
         participant["display_name"],
         participant["role"],
         participant["budget"],
+        spent=participant.get("spent", 0),
         bid_duration=room_info.get("bid_duration", 30),
         first_bid_duration=room_info.get("first_bid_duration", 120),
         scheduled_at=room_info.get("scheduled_at"),
@@ -118,6 +119,9 @@ async def websocket_endpoint(
         )
         if items_data.data:
             await auction_service.load_items(room_id, items_data.data)
+
+    # Reconstruct in-memory state from DB if server restarted mid-auction
+    await auction_service.reconstruct_state(room_id, room_info.get("status", "lobby"))
 
     await manager.send_to_user(room_id, user_id, {
         "type": "room_state",
