@@ -1,9 +1,11 @@
 import asyncio
 import json
+import os
 from datetime import datetime, timezone
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 
 from .config import settings
 from .database import verify_token, get_supabase
@@ -191,3 +193,8 @@ async def commentary_stream(room_id: str, token: str = Query(...)):
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+# Serve built frontend (when frontend/dist exists — i.e. in production)
+_dist = os.path.join(os.path.dirname(__file__), '..', 'frontend', 'dist')
+if os.path.exists(_dist):
+    app.mount("/", StaticFiles(directory=_dist, html=True), name="spa")

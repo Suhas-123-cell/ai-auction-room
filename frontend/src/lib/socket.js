@@ -1,9 +1,11 @@
-// Dev: falls back to ws://localhost:8000 (Vite proxies it)
-// Prod: derive wss:// from VITE_API_URL (e.g. https://your-app.onrender.com → wss://...)
+// Derive WebSocket base URL:
+// - If VITE_API_URL is set (separate deploy): convert https://host → wss://host
+// - If empty (same-origin deploy or dev): use window.location so Vite proxy works in dev
+//   and the same host works in prod
 const _api = import.meta.env.VITE_API_URL || ''
 const WS_BASE = _api
   ? _api.replace(/^http/, 'ws')
-  : (import.meta.env.VITE_WS_URL ?? 'ws://localhost:8000')
+  : `${typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss' : 'ws'}://${typeof window !== 'undefined' ? window.location.host : 'localhost:8000'}`
 
 export function createRoomSocket(roomId, token, handlers) {
   const ws = new WebSocket(`${WS_BASE}/ws/${roomId}?token=${token}`)
