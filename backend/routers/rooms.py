@@ -191,10 +191,30 @@ async def get_results(room_id: str, user_id: str = Depends(get_user_id)):
     items = sb.table("items").select("*").eq("room_id", room_id).order("order_index").execute()
     participants = sb.table("room_participants").select("*").eq("room_id", room_id).execute()
     bids = sb.table("bids").select("*").eq("room_id", room_id).execute()
-    # Map DB column names to frontend-expected field names
+
+    item_rows = items.data
+
+    # Fallback: if DB returns no items, pull from in-memory auction state
+    if not item_rows:
+        from ..services.registry import auction_service
+        room_mem = auction_service.get_room(room_id)
+        if room_mem and room_mem.items:
+            item_rows = [
+                {
+                    "id": it.id, "room_id": room_id, "name": it.name,
+                    "description": it.description, "base_price": it.base_price,
+                    "current_bid": it.current_bid, "status": it.status,
+                    "winner_id": it.highest_bidder_id, "winner_name": it.highest_bidder_name,
+                    "sold_price": it.current_bid if it.status == "sold" else None,
+                    "photo_url": it.photo_url, "order_index": it.order_index,
+                }
+                for it in room_mem.items
+            ]
+
     mapped_items = [
-        {**item, "winner": item.get("winner_name"), "sold_price": item.get("sold_price") or item.get("current_bid") if item.get("status") == "sold" else None}
-        for item in items.data
+        {**item, "winner": item.get("winner_name"),
+         "sold_price": item.get("sold_price") or (item.get("current_bid") if item.get("status") == "sold" else None)}
+        for item in item_rows
     ]
     return {
         "items": mapped_items,
