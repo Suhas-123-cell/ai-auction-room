@@ -15,11 +15,23 @@ Built for the **11auction internship assignment** — Tier 1 AI features.
 | **AI Auctioneer** | `llama-3.1-8b-instant` streams live commentary via SSE at every bid moment |
 | **Shill Bid Detection** | Rule-based scoring + LLM deep analysis; alerts admin in real time |
 
-### Core Mechanics
+### Core Auction Mechanics
 - **Server-authoritative clock** — asyncio timer broadcasts `timer_tick` every second; clients display only
-- **Atomic bids** — asyncio lock per room; server rejects stale bids silently
-- **Anti-sniping** — bids in final 10s extend timer by 5s (max 15s extension)
-- **State machine** — LOBBY → AUCTION → COMPLETED; items go pending → active → sold/unsold
+- **Atomic bids** — asyncio lock per room; server rejects stale/invalid bids
+- **Going-once timer** — each bid fully resets the countdown (configurable, default 30s per bid)
+- **Opening window** — first bid on each item gets a longer window (configurable, default 2 min)
+- **State machine** — `lobby → auction → completed`; items go `pending → active → sold/unsold`
+
+### Room & Scheduling
+- **Scheduled start** — set a future date/time; background scheduler auto-starts the room at that time
+- **Manual override** — admin can start immediately regardless of schedule
+- **Live item addition** — admin can add new items to the queue mid-auction via modal
+- **Back to dashboard** — participants can leave and rejoin; auction runs server-side uninterrupted
+
+### User Features
+- **Photo upload** — item photos stored in Supabase Storage, shown in item display and queue
+- **My Bid History** — view all bids across all rooms; remove bids from completed auctions
+- **Auction History** — see all rooms you created as admin with items sold, bids placed, and earnings
 
 ---
 
@@ -30,8 +42,8 @@ Built for the **11auction internship assignment** — Tier 1 AI features.
 | Backend | FastAPI + Uvicorn |
 | WebSockets | FastAPI native (no Socket.io) |
 | AI / LLMs | Groq API — Llama, Gemma, Mixtral |
-| Database | Supabase (PostgreSQL) |
-| Auth | Supabase Auth + PyJWT |
+| Database | Supabase (PostgreSQL + Storage) |
+| Auth | Supabase Auth (`auth.get_user()` server-side verification) |
 | Frontend | React 18 + Vite (no TypeScript, no Tailwind) |
 | Routing | React Router v6 |
 | HTTP | native fetch (no axios) |
@@ -43,28 +55,37 @@ Built for the **11auction internship assignment** — Tier 1 AI features.
 ### Prerequisites
 - Python 3.11+
 - Node 18+
-- Supabase project
+- Supabase project (with `item-photos` storage bucket set to public)
 - Groq API key
 
-### Backend
+### 1. Database
+Run `supabase/schema.sql` in your Supabase SQL editor.
+
+Create a public storage bucket named `item-photos` in Supabase Storage.
+
+### 2. Environment
 ```bash
-cd /path/to/ai-auction-room
-python -m venv .venv && source .venv/bin/activate
-pip install -e .
-cp .env.example .env   # fill in values
-uvicorn backend.main:app --reload
+cp .env.example .env
+# Fill in: SUPABASE_URL, SUPABASE_SERVICE_KEY, SUPABASE_JWT_SECRET,
+#          GROQ_API_KEY, VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
 ```
 
-### Frontend
+Leave `VITE_API_URL` empty — Vite proxies `/api` and `/ws` to the backend automatically.
+
+### 3. Backend
+```bash
+# From repo root (where pyproject.toml lives)
+source /path/to/.venv/bin/activate
+pip install -e .
+uvicorn backend.main:app --reload --port 8000
+```
+
+### 4. Frontend
 ```bash
 cd frontend
 npm install
-cp .env.example .env   # fill in values
-npm run dev
+npm run dev   # runs on :5173 or :5174
 ```
-
-### Database
-Run `supabase/schema.sql` in your Supabase SQL editor.
 
 ---
 
@@ -73,24 +94,30 @@ Run `supabase/schema.sql` in your Supabase SQL editor.
 ```
 ai-auction-room/
 ├── backend/
-│   ├── main.py              # FastAPI app, WebSocket handler, SSE endpoint
-│   ├── config.py            # Settings, Groq model list
-│   ├── database.py          # Supabase singleton + JWT verification
-│   ├── ws_manager.py        # Room WebSocket manager
-│   ├── models.py            # Pydantic models
+│   ├── main.py              # FastAPI app, WebSocket handler, SSE, scheduler
+│   ├── config.py            # Pydantic settings, Groq model constants
+│   ├── database.py          # Supabase singleton + token verification
+│   ├── ws_manager.py        # Per-room WebSocket connection manager
+│   ├── models.py            # Pydantic request/response models
 │   ├── routers/
-│   │   └── rooms.py         # Room CRUD REST API
+│   │   ├── auth.py          # Sign-in / sign-up proxy
+│   │   └── rooms.py         # Room CRUD, item upload, bid history, auction history
 │   └── services/
-│       ├── auction.py       # Core state machine + timer
+│       ├── registry.py      # Shared singletons (manager, auction_service)
+│       ├── auction.py       # Core state machine + asyncio timer
 │       ├── council.py       # Karpathy 3-stage LLM Council
-│       ├── auctioneer.py    # AI commentary (streaming + non-streaming)
-│       └── shill.py         # Shill bid detection
+│       ├── auctioneer.py    # AI commentary (streaming SSE + non-streaming)
+│       └── shill.py         # Shill bid detection (rule-based + LLM)
 ├── frontend/
 │   └── src/
-│       ├── App.jsx
-│       ├── lib/             # supabase.js, socket.js
-│       ├── hooks/           # useAuth.js, useAuction.js
-│       ├── pages/           # Login, Dashboard, AuctionRoom, Results
+│       ├── App.jsx          # Routes + auth guard
+│       ├── lib/             # supabase.js (client + getToken)
+│       ├── hooks/           # useAuth.js, useAuction.js (WebSocket state)
+│       ├── pages/
+│       │   ├── Login.jsx    # Sign in / sign up
+│       │   ├── Dashboard.jsx # Create, Join, Bid History, Auction History
+│       │   ├── AuctionRoom.jsx # Live auction UI (lobby + auction views)
+│       │   └── Results.jsx  # Post-auction summary
 │       └── components/      # Timer, BidPanel, BidFeed, ItemDisplay,
 │                            # CouncilValuation, AuctioneerTicker, ParticipantsList
 ├── supabase/schema.sql
@@ -111,7 +138,7 @@ Stage 1 (parallel)  →  Stage 2 (cross-review)  →  Stage 3 (Chairman)
    Mixtral─┘              Mixtral reviews A,B         JSON verdict
 ```
 
-Output: `{fair_value_low, fair_value_high, suggested_max_bid, opening_assessment, consensus_confidence, chairman_summary}`
+Output: `{ fair_value_low, fair_value_high, suggested_max_bid, opening_assessment, consensus_confidence, chairman_summary }`
 
 ---
 
@@ -122,19 +149,23 @@ Output: `{fair_value_low, fair_value_high, suggested_max_bid, opening_assessment
 { "type": "place_bid",     "data": { "amount": 5500 } }
 { "type": "start_auction", "data": {} }
 { "type": "next_item",     "data": {} }
+{ "type": "ping",          "data": {} }
 ```
 
 **Server → Client**
 ```json
-{ "type": "room_state",        "data": { ... } }
+{ "type": "room_state",        "data": { "status": "...", "current_item": {...}, "items_queue": [...] } }
 { "type": "bid_update",        "data": { "current_bid": 5500, "bid_history": [...] } }
 { "type": "timer_tick",        "data": { "seconds_left": 23 } }
-{ "type": "council_valuation", "data": { "item_id": "...", "valuation": { ... } } }
-{ "type": "shill_alert",       "data": { "bidder": "...", "score": 0.7 } }
+{ "type": "council_valuation", "data": { "item_id": "...", "valuation": {...} } }
+{ "type": "shill_alert",       "data": { "bidder": "...", "score": 0.7, "reason": "..." } }
+{ "type": "item_started",      "data": { "item": {...}, "lot_number": 2 } }
+{ "type": "item_added",        "data": { "id": "...", "name": "...", "items_total": 4 } }
+{ "type": "auction_completed", "data": { "results": {...} } }
 ```
 
 ---
 
 ## Environment Variables
 
-See `.env.example` (backend) and `frontend/.env.example` for required variables.
+See `.env.example` at the repo root for all required variables (shared by backend and frontend).

@@ -110,7 +110,7 @@ export default function AuctionRoom() {
     <>
       <header className="app-header">
         <div style={{display:'flex',alignItems:'center',gap:16}}>
-          <button onClick={()=>nav('/dashboard')} style={{background:'none',border:'none',color:'var(--text-3)',cursor:'pointer',fontSize:13,padding:'4px 0',display:'flex',alignItems:'center',gap:6}}>
+          <button onClick={()=>nav('/')} style={{background:'none',border:'none',color:'var(--text-3)',cursor:'pointer',fontSize:13,padding:'4px 0',display:'flex',alignItems:'center',gap:6}}>
             ← Dashboard
           </button>
           <div className="logo">AI <span>Auction</span> Room</div>
@@ -185,7 +185,7 @@ export default function AuctionRoom() {
     <>
       <header className="app-header">
         <div style={{display:'flex',alignItems:'center',gap:16}}>
-          <button onClick={()=>nav('/dashboard')} style={{background:'none',border:'none',color:'var(--text-3)',cursor:'pointer',fontSize:13,padding:'4px 0',display:'flex',alignItems:'center',gap:6}}>
+          <button onClick={()=>nav('/')} style={{background:'none',border:'none',color:'var(--text-3)',cursor:'pointer',fontSize:13,padding:'4px 0',display:'flex',alignItems:'center',gap:6}}>
             ← Dashboard
           </button>
           <div className="logo">AI <span>Auction</span> Room</div>
@@ -228,46 +228,49 @@ export default function AuctionRoom() {
           {itemsQueue.length > 0 && (
             <div className="queue-card">
               <div className="queue-header">
-                Item Queue
-                <span style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--text-3)',fontWeight:400,marginLeft:8}}>
-                  {itemsCompleted}/{itemsTotal} done
-                </span>
+                <div className="queue-header-left">
+                  <span className="queue-header-icon">📋</span>
+                  Item Queue
+                </div>
+                <span className="queue-counter">{itemsCompleted}/{itemsTotal}</span>
               </div>
-              <div style={{display:'flex',flexDirection:'column',gap:6}}>
+              {itemsTotal > 0 && (
+                <div className="queue-progress-wrap">
+                  <div className="queue-progress-bar" style={{width: `${(itemsCompleted / itemsTotal) * 100}%`}} />
+                </div>
+              )}
+              <div className="queue-list">
                 {itemsQueue.map((item, idx) => {
                   const isCurrent = item.id === currentItem?.id
                   const isDone    = item.status === 'sold' || item.status === 'unsold'
                   return (
-                    <div key={item.id} style={{
-                      display:'flex',alignItems:'center',gap:10,padding:'6px 8px',
-                      borderRadius:'var(--r-sm)',
-                      background: isCurrent ? 'rgba(201,168,76,0.08)' : 'transparent',
-                      border: isCurrent ? '1px solid var(--gold-border)' : '1px solid transparent',
-                      opacity: isDone ? 0.45 : 1,
-                    }}>
-                      <div style={{
-                        width:36,height:36,borderRadius:6,flexShrink:0,overflow:'hidden',
-                        background:'var(--bg-raise)',border:'1px solid rgba(255,255,255,0.08)'
-                      }}>
+                    <div
+                      key={item.id}
+                      className={`queue-row${isCurrent ? ' queue-row--active' : ''}${isDone ? ' queue-row--done' : ''}`}
+                    >
+                      <div className="queue-row-index">
+                        {isDone
+                          ? (item.status === 'sold' ? '✓' : '✗')
+                          : isCurrent ? '▶' : idx + 1}
+                      </div>
+                      <div className="queue-row-thumb">
                         {item.photo_url
-                          ? <img src={item.photo_url} alt={item.name} style={{width:'100%',height:'100%',objectFit:'cover'}} />
-                          : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,color:'var(--text-3)'}}>🖼</div>
+                          ? <img src={item.photo_url} alt={item.name} />
+                          : <div className="queue-row-thumb-placeholder">🖼</div>
                         }
                       </div>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{
-                          fontSize:13,fontWeight:600,
-                          color: isCurrent ? 'var(--gold)' : isDone ? 'var(--text-3)' : 'var(--text-1)',
-                          overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'
-                        }}>{item.name}</div>
-                        <div style={{fontSize:11,color:'var(--text-3)',fontFamily:'var(--mono)'}}>
+                      <div className="queue-row-info">
+                        <div className="queue-row-name">{item.name}</div>
+                        <div className="queue-row-price">
                           ₹{(item.current_bid || item.base_price).toLocaleString()}
                         </div>
                       </div>
-                      {isCurrent && <span className="badge active" style={{fontSize:10,padding:'2px 6px'}}>live</span>}
-                      {item.status==='sold'   && <span style={{fontSize:10,color:'var(--green)',fontWeight:700}}>SOLD</span>}
-                      {item.status==='unsold' && <span style={{fontSize:10,color:'var(--red)',fontWeight:700}}>PASS</span>}
-                      {!isCurrent && !isDone  && <span style={{fontSize:10,color:'var(--text-3)'}}>{'#'+(idx+1)}</span>}
+                      <div className="queue-row-badge">
+                        {isCurrent && <span className="queue-badge queue-badge--live">LIVE</span>}
+                        {item.status === 'sold' && <span className="queue-badge queue-badge--sold">SOLD</span>}
+                        {item.status === 'unsold' && <span className="queue-badge queue-badge--pass">PASS</span>}
+                        {!isCurrent && !isDone && <span className="queue-badge queue-badge--pending">#{idx + 1}</span>}
+                      </div>
                     </div>
                   )
                 })}
