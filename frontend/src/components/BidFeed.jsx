@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 
 const fmtTime = (iso) => {
-  try { return new Date(iso+'Z').toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}) }
+  try { const d = new Date(iso.endsWith('Z') || iso.includes('+') ? iso : iso+'Z'); return d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}) }
   catch { return '' }
 }
 
