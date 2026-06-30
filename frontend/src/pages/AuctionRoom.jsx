@@ -297,6 +297,7 @@ export default function AuctionRoom() {
             highestBidder={currentItem?.highest_bidder}
             onBid={placeBid}
             disabled={!connected || currentItem?.status!=='active' || (currentItem?.timer_seconds??0)<=0}
+            remainingBudget={me ? me.budget - me.spent : null}
           />
 
           <BidFeed bids={bids} currentBid={currentItem?.current_bid} />
