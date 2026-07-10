@@ -222,9 +222,6 @@ export default function AuctionRoom() {
             </div>
           ))}
 
-          <ItemDisplay item={currentItem} lotNumber={lotNum} timerTotal={TIMER_TOTAL} />
-          <CouncilValuation valuation={currentItem?.council_valuation} loading={councilLoading} />
-
           {itemsQueue.length > 0 && (
             <div className="queue-card">
               <div className="queue-header">
@@ -277,6 +274,9 @@ export default function AuctionRoom() {
               </div>
             </div>
           )}
+
+          <ItemDisplay item={currentItem} lotNumber={lotNum} timerTotal={TIMER_TOTAL} />
+          <CouncilValuation valuation={currentItem?.council_valuation} loading={councilLoading} />
         </div>
 
         {/* RIGHT */}
