@@ -289,7 +289,7 @@ class AuctionService:
                     "id": item.id, "name": item.name, "description": item.description,
                     "base_price": item.base_price, "photo_url": item.photo_url,
                     "current_bid": item.current_bid, "timer_seconds": item.timer_seconds,
-                    "council_valuation": None,
+                    "status": item.status, "council_valuation": None,
                 },
                 "commentary": room.latest_commentary,
             },
